@@ -1,0 +1,49 @@
+name: Release
+
+# Publishes to nuget.org with Trusted Publishing: no API key is stored anywhere.
+# nuget.org must have a trust policy for this repository and this workflow file (release.yml).
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # lets NuGet/login exchange the GitHub OIDC token for a short-lived API key
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: The tag must match the package version
+        run: |
+          version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/BillionVerify/BillionVerify.csproj | head -n 1)"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match <Version> ${version}"
+            exit 1
+          fi
+
+      - run: dotnet test tests/BillionVerify.Tests -c Release
+      - run: dotnet pack src/BillionVerify -c Release -o artifacts
+
+      - name: Get a short-lived NuGet API key
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ikbear
+
+      - name: Push the package
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols
+
+      - name: Push the symbols
+        run: dotnet nuget push "artifacts/*.snupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
