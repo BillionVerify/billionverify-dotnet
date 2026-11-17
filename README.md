@@ -41,7 +41,7 @@ var client = new BillionVerifyClient(new BillionVerifyClientOptions
 
 Requests that get 429, 500, 502 or 503 are retried: the wait is the `Retry-After` header when there is one, otherwise 2, 4, 8 … seconds. Network errors and timeouts are not retried.
 
-With ASP.NET Core you can pass an `HttpClient` from `IHttpClientFactory` in `BillionVerifyClientOptions.HttpClient`. Turn automatic redirects off on its handler (`AllowAutoRedirect = false`): result downloads are redirected to a storage host, and the SDK follows that redirect itself so the API key is not sent there.
+To add a proxy, logging or retries of your own, pass a message handler in `BillionVerifyClientOptions.HttpMessageHandler` (with `IHttpClientFactory`: `ConfigurePrimaryHttpMessageHandler`). Result downloads are redirected to a storage host, and the SDK follows that redirect itself so the API key is not sent there; for that it turns `AllowAutoRedirect` off on every `HttpClientHandler` and `SocketsHttpHandler` in your handler chain. A handler of any other kind must not follow redirects itself.
 
 ## Verify
 

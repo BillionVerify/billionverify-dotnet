@@ -91,7 +91,7 @@ public static class T
         var options = new BillionVerifyClientOptions
         {
             ApiKey = "test-key",
-            HttpClient = new HttpClient(handler),
+            HttpMessageHandler = handler,
             Delay = (span, _) => { delays.Add(span); return Task.CompletedTask; },
         };
         configure?.Invoke(options);

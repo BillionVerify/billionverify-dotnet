@@ -23,7 +23,6 @@ public sealed partial class BillionVerifyClient : IDisposable
     private readonly TimeSpan _timeout;
     private readonly int _attempts;
     private readonly HttpClient _http;
-    private readonly bool _ownsHttp;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
     public BillionVerifyClient(string apiKey)
@@ -45,29 +44,43 @@ public sealed partial class BillionVerifyClient : IDisposable
         _attempts = Math.Max(1, options.Retries);
         _delay = options.Delay ?? ((span, token) => Task.Delay(span, token));
 
-        if (options.HttpClient is not null)
+        // Redirects are followed by hand so the API key never goes to another host, whatever handler is underneath.
+        if (options.HttpMessageHandler is { } custom)
         {
-            _http = options.HttpClient;
-            _ownsHttp = false;
+            DisableAutoRedirect(custom);
+            _http = new HttpClient(custom, disposeHandler: false) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
         }
         else
         {
-            // Redirects are followed by hand so the API key never goes to another host.
-            _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
-            {
-                Timeout = System.Threading.Timeout.InfiniteTimeSpan,
-            };
-            _ownsHttp = true;
+            _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
         }
     }
 
-    public void Dispose()
+    private static void DisableAutoRedirect(HttpMessageHandler handler)
     {
-        if (_ownsHttp)
+        for (HttpMessageHandler? h = handler; h is not null; h = (h as DelegatingHandler)?.InnerHandler)
         {
-            _http.Dispose();
+            try
+            {
+                switch (h)
+                {
+                    case HttpClientHandler { AllowAutoRedirect: true } client:
+                        client.AllowAutoRedirect = false;
+                        break;
+                    case SocketsHttpHandler { AllowAutoRedirect: true } sockets:
+                        sockets.AllowAutoRedirect = false;
+                        break;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw new ValidationException(
+                    $"The {h.GetType().Name} in HttpMessageHandler has already sent requests and follows redirects; set AllowAutoRedirect = false on it before creating the client.");
+            }
         }
     }
+
+    public void Dispose() => _http.Dispose();
 
     private static Uri NormalizeBaseUrl(string? baseUrl)
     {

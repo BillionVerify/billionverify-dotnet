@@ -16,11 +16,14 @@ public sealed class BillionVerifyClientOptions
     public int Retries { get; set; } = 3;
 
     /// <summary>
-    /// Your own <see cref="HttpClient"/>. The SDK then does not dispose it. It must not follow redirects
-    /// automatically (<c>AllowAutoRedirect = false</c>), or the API key header would travel to the storage host
-    /// when a result download is redirected; its own <c>Timeout</c> should be at least as long as <see cref="Timeout"/>.
+    /// A message handler of your own (a proxy, logging, resilience, a test double). The SDK builds its own
+    /// <see cref="HttpClient"/> over it and does not dispose the handler. Result downloads are redirected to a storage
+    /// host, and the SDK follows that redirect itself so the API key is not sent there; so the SDK turns automatic
+    /// redirects off on every <see cref="HttpClientHandler"/> and <see cref="SocketsHttpHandler"/> in the chain (through
+    /// <see cref="DelegatingHandler.InnerHandler"/>). It throws <see cref="ValidationException"/> if one of them has already
+    /// sent requests and still follows redirects. A handler of any other kind must not follow redirects itself.
     /// </summary>
-    public HttpClient? HttpClient { get; set; }
+    public HttpMessageHandler? HttpMessageHandler { get; set; }
 
     /// <summary>How retries and polling wait. Default <see cref="Task.Delay(TimeSpan, CancellationToken)"/>; replace it in tests.</summary>
     public Func<TimeSpan, CancellationToken, Task>? Delay { get; set; }
